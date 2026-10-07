@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Attendance — IoT Lab</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Outfit', 'sans-serif'] },
+          colors: {
+            brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5' }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    .fade-in { animation: gentleFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(8px); }
+    @keyframes gentleFade { to { opacity: 1; transform: translateY(0); } }
+    
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .sortable { cursor: pointer; user-select: none; }
+    .sortable:hover { background: rgba(0,0,0,0.02); }
+    .sort-icon { opacity: 0.3; transition: opacity 0.2s; }
+    .sortable:hover .sort-icon { opacity: 1; }
+    
+    .toast { animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    
+    @media (max-width: 1024px) {
+      .mobile-card { display: block !important; }
+      .desktop-table { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-stone-50 text-stone-800 min-h-screen antialiased selection:bg-brand-100 selection:text-brand-600">
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+  <div class="max-w-7xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
+    
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-20"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span class="text-xs font-semibold uppercase tracking-widest text-stone-400">Live Dashboard</span>
+        </div>
+        <h1 class="text-4xl font-bold text-stone-900 tracking-tight">IoT Lab Attendance</h1>
+        <p class="text-stone-500 mt-1 text-lg">Welcome, Madesh. Here's today's session tracking.</p>
+      </div>
+      
+      <div class="flex items-center gap-3">
+        <button onclick="exportCSV()" class="flex items-center gap-2 bg-white hover:bg-stone-50 px-4 py-2.5 rounded-xl shadow-sm border border-stone-200 transition-colors">
+          <svg class="w-4 h-4 text-stone-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+          <span class="text-sm font-medium text-stone-700">Export CSV</span>
+        </button>
+        <div class="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl shadow-sm border border-stone-100">
+          <svg class="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span class="text-sm font-medium text-stone-600" id="last-updated">Connecting...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div class="bg-white rounded-3xl p-6 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.04)] border border-stone-100">
+        <p class="text-sm font-medium text-stone-500">Total Records</p>
+        <p class="text-3xl font-bold mt-2 text-stone-900" id="stat-total">0</p>
+      </div>
+      <div class="bg-emerald-50/50 rounded-3xl p-6 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.04)] border border-emerald-100">
+        <p class="text-sm font-medium text-emerald-700">Present</p>
+        <p class="text-3xl font-bold mt-2 text-emerald-900" id="stat-present">0</p>
+      </div>
+      <div class="bg-amber-50/50 rounded-3xl p-6 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.04)] border border-amber-100">
+        <p class="text-sm font-medium text-amber-700">In Lab</p>
+        <p class="text-3xl font-bold mt-2 text-amber-900" id="stat-pending">0</p>
+      </div>
+      <div class="bg-red-50/50 rounded-3xl p-6 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.04)] border border-red-100">
+        <p class="text-sm font-medium text-red-700">Absent</p>
+        <p class="text-3xl font-bold mt-2 text-red-900" id="stat-absent">0</p>
+      </div>
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div class="bg-white rounded-2xl shadow-sm border border-stone-100 p-4 mb-6">
+      <div class="flex flex-col lg:flex-row gap-3">
+        <div class="flex-1 relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+          <input type="text" id="search-input" placeholder="Search by name or roll number..." 
+                 class="w-full pl-10 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent">
+        </div>
+        <select id="status-filter" class="px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+          <option value="all">All Status</option>
+          <option value="PRESENT">Present</option>
+          <option value="PENDING">In Lab</option>
+          <option value="ABSENT">Absent</option>
+        </select>
+        <button onclick="clearFilters()" class="px-4 py-2.5 text-sm font-medium text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-xl transition-colors">
+          Clear Filters
+        </button>
+      </div>
+    </div>
+
+    <!-- Data Table (Desktop) -->
+    <div class="desktop-table bg-white rounded-3xl shadow-[0_2px_16px_-4px_rgba(0,0,0,0.05)] border border-stone-100 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-stone-50/80 border-b border-stone-100 text-xs font-semibold uppercase tracking-wider text-stone-500">
+              <th class="px-6 py-5 sortable" data-sort="attendance_date">
+                <div class="flex items-center gap-2">Date <span class="sort-icon">↕</span></div>
+              </th>
+              <th class="px-6 py-5 sortable" data-sort="name">
+                <div class="flex items-center gap-2">Student <span class="sort-icon">↕</span></div>
+              </th>
+              <th class="px-6 py-5 sortable" data-sort="subject">
+                <div class="flex items-center gap-2">Subject <span class="sort-icon">↕</span></div>
+              </th>
+              <th class="px-6 py-5 sortable" data-sort="first_scan">
+                <div class="flex items-center gap-2">Entry <span class="sort-icon">↕</span></div>
+              </th>
+              <th class="px-6 py-5 sortable" data-sort="second_scan">
+                <div class="flex items-center gap-2">Exit <span class="sort-icon">↕</span></div>
+              </th>
+              <th class="px-6 py-5">Duration</th>
+              <th class="px-6 py-5 text-center sortable" data-sort="status">
+                <div class="flex items-center justify-center gap-2">Status <span class="sort-icon">↕</span></div>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="rows" class="divide-y divide-stone-100 text-sm">
+            <tr>
+              <td colspan="7" class="px-6 py-16 text-center text-stone-400">
+                <svg class="w-8 h-8 mx-auto mb-3 animate-spin text-brand-500" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span class="text-sm font-medium">Fetching live data...</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Mobile Card View -->
+    <div id="mobile-cards" class="mobile-card space-y-3 hidden"></div>
+    
+    <p class="text-center text-xs text-stone-400 mt-8 font-medium">Auto-refreshes every 10 seconds • Powered by Supabase</p>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://vhjhvnyfwarlwuwlcxub.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoamh2bnlmd2FybHd1d2xjeHViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyOTE5ODQsImV4cCI6MjEwNjg2Nzk4NH0.vxfmY-S6CHdQ3jt0kmNEmfp9bTKkqxxO9OF4DkMyKNI';
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let allData = [];
+    let currentSort = { column: 'first_scan', direction: 'desc' };
+
+    function formatTime(isoString) {
+      if (!isoString) return '<span class="text-stone-300 font-medium">—</span>';
+      return new Date(isoString).toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit' });
+    }
+
+    function formatDate(isoString) {
+      if (!isoString) return '<span class="text-stone-300 font-medium">—</span>';
+      return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function calculateDuration(start, end, status) {
+      if (status === 'ABSENT' || !start || !end) return '<span class="text-stone-300">—</span>';
+      const diff = new Date(end) - new Date(start);
+      const hours = Math.floor(diff / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      const bgColor = type === 'success' ? 'bg-emerald-500' : type === 'error' ? 'bg-red-500' : 'bg-brand-500';
+      toast.className = `toast ${bgColor} text-white px-6 py-3 rounded-xl shadow-lg text-sm font-medium`;
+      toast.textContent = message;
+      document.getElementById('toast-container').appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function exportCSV() {
+      if (allData.length === 0) {
+        showToast('No data to export', 'error');
+        return;
+      }
+
+      const headers = ['Date', 'Student Name', 'Roll No', 'Subject', 'Entry Time', 'Exit Time', 'Duration', 'Status', 'Schedule ID'];
+      const rows = allData.map(r => [
+        r.attendance_date || '',
+        r.students?.name || 'Unknown',
+        r.students?.roll_no || 'N/A',
+        r.subject || 'IoT Lab',
+        r.first_scan ? new Date(r.first_scan).toLocaleString() : '',
+        r.second_scan ? new Date(r.second_scan).toLocaleString() : '',
+        calculateDuration(r.first_scan, r.second_scan, r.status).replace(/<[^>]*>/g, ''), // strip HTML for CSV
+        r.status,
+        r.schedule_id || ''
+      ]);
+
+      const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `attendance_export_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('CSV exported successfully!', 'success');
+    }
+
+    document.querySelectorAll('.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const column = th.dataset.sort;
+        if (currentSort.column === column) {
+          currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentSort.column = column;
+          currentSort.direction = 'asc';
+        }
+        renderData();
+      });
+    });
+
+    document.getElementById('search-input').addEventListener('input', renderData);
+    document.getElementById('status-filter').addEventListener('change', renderData);
+
+    function clearFilters() {
+      document.getElementById('search-input').value = '';
+      document.getElementById('status-filter').value = 'all';
+      renderData();
+    }
+
+    function renderData() {
+      const searchTerm = document.getElementById('search-input').value.toLowerCase();
+      const statusFilter = document.getElementById('status-filter').value;
+
+      let filtered = allData.filter(r => {
+        const name = (r.students?.name || '').toLowerCase();
+        const roll = (r.students?.roll_no || '').toLowerCase();
+        const matchesSearch = name.includes(searchTerm) || roll.includes(searchTerm);
+        const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+
+      filtered.sort((a, b) => {
+        let aVal, bVal;
+        switch (currentSort.column) {
+          case 'name': aVal = a.students?.name || ''; bVal = b.students?.name || ''; break;
+          case 'subject': aVal = a.subject || ''; bVal = b.subject || ''; break;
+          case 'attendance_date': aVal = a.attendance_date || ''; bVal = b.attendance_date || ''; break;
+          case 'first_scan': aVal = a.first_scan || ''; bVal = b.first_scan || ''; break;
+          case 'second_scan': aVal = a.second_scan || ''; bVal = b.second_scan || ''; break;
+          case 'status': aVal = a.status || ''; bVal = b.status || ''; break;
+          default: return 0;
+        }
+        if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      const tbody = document.getElementById('rows');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="7" class="px-6 py-16 text-center text-stone-400">
+            <svg class="w-10 h-10 mx-auto mb-3 text-stone-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+            <p class="font-medium">No records found</p>
+            <p class="text-xs mt-1">Try adjusting your filters or tap a card to begin.</p>
+          </td></tr>`;
+      } else {
+        tbody.innerHTML = filtered.map((r, index) => {
+          const studentName = r.students?.name || 'Unknown Student';
+          const rollNo = r.students?.roll_no || 'N/A';
+          
+          let statusBadge = '';
+          if (r.status === 'PRESENT') {
+            statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">Present</span>`;
+          } else if (r.status === 'PENDING') {
+            statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span> In Lab</span>`;
+          } else if (r.status === 'ABSENT') {
+            statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">Absent</span>`;
+          } else {
+            statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200">${r.status || 'Unknown'}</span>`;
+          }
+
+          return `
+            <tr class="hover:bg-stone-50/80 transition-colors duration-200 fade-in" style="animation-delay: ${index * 0.03}s">
+              <td class="px-6 py-5 font-medium text-stone-600">${formatDate(r.attendance_date)}</td>
+              <td class="px-6 py-5">
+                <div class="font-semibold text-stone-900 text-base">${studentName}</div>
+                <div class="text-xs text-stone-400 font-medium mt-0.5">Roll: ${rollNo}</div>
+              </td>
+              <td class="px-6 py-5 text-stone-600 font-medium">${r.subject || 'IoT Lab'}</td>
+              <td class="px-6 py-5 font-mono text-stone-700">${formatTime(r.first_scan)}</td>
+              <td class="px-6 py-5 font-mono text-stone-700">${formatTime(r.second_scan)}</td>
+              <td class="px-6 py-5 font-medium text-stone-600">${calculateDuration(r.first_scan, r.second_scan, r.status)}</td>
+              <td class="px-6 py-5 text-center">${statusBadge}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      const mobileCards = document.getElementById('mobile-cards');
+      if (filtered.length === 0) {
+        mobileCards.innerHTML = `<div class="bg-white rounded-2xl p-8 text-center text-stone-400"><p class="font-medium">No records found</p></div>`;
+      } else {
+        mobileCards.innerHTML = filtered.map((r, index) => {
+          const studentName = r.students?.name || 'Unknown Student';
+          const rollNo = r.students?.roll_no || 'N/A';
+          
+          let statusBadge = '';
+          if (r.status === 'PRESENT') {
+            statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Present</span>`;
+          } else if (r.status === 'PENDING') {
+            statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span> In Lab</span>`;
+          } else if (r.status === 'ABSENT') {
+            statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Absent</span>`;
+          }
+
+          return `
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-stone-100 fade-in" style="animation-delay: ${index * 0.03}s">
+              <div class="flex items-start justify-between mb-3">
+                <div>
+                  <div class="font-semibold text-stone-900 text-lg">${studentName}</div>
+                  <div class="text-xs text-stone-400 font-medium mt-0.5">Roll: ${rollNo} • ${formatDate(r.attendance_date)}</div>
+                </div>
+                ${statusBadge}
+              </div>
+              <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                  <span class="text-stone-500">Subject:</span>
+                  <span class="font-medium text-stone-700">${r.subject || 'IoT Lab'}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-stone-500">Entry:</span>
+                  <span class="font-medium text-stone-700">${formatTime(r.first_scan)}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-stone-500">Exit:</span>
+                  <span class="font-medium text-stone-700">${formatTime(r.second_scan)}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-stone-500">Duration:</span>
+                  <span class="font-medium text-stone-700">${calculateDuration(r.first_scan, r.second_scan, r.status)}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    async function load() {
+      try {
+        const { data, error } = await sb
+          .from('attendance')
+          .select('id, uid, subject, first_scan, second_scan, status, attendance_date, schedule_id, students(name, roll_no)')
+          .order('first_scan', { ascending: false })
+          .limit(150);
+
+        if (error) throw error;
+
+        const previousCount = allData.length;
+        allData = data || [];
+
+        const total = allData.length;
+        const present = allData.filter(r => r.status === 'PRESENT').length;
+        const pending = allData.filter(r => r.status === 'PENDING').length;
+        const absent = allData.filter(r => r.status === 'ABSENT').length;
+
+        document.getElementById('stat-total').textContent = total;
+        document.getElementById('stat-present').textContent = present;
+        document.getElementById('stat-pending').textContent = pending;
+        document.getElementById('stat-absent').textContent = absent;
+        document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+        if (previousCount > 0 && allData.length > previousCount) {
+          showToast(`${allData.length - previousCount} new update(s) detected!`, 'success');
+        }
+
+        renderData();
+      } catch (err) {
+        console.error('Error loading data:', err);
+        document.getElementById('rows').innerHTML = `
+          <tr><td colspan="7" class="px-6 py-16 text-center text-red-500">
+            <p class="font-semibold">Unable to connect to database</p>
+            <p class="text-xs text-red-400 mt-1">Please check your Supabase URL and Anon Key.</p>
+          </td></tr>`;
+        showToast('Failed to load data', 'error');
+      }
+    }
+
+    load();
+    setInterval(load, 10000);
+  </script>
+</body>
+</html>
