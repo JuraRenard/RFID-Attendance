@@ -41,7 +41,6 @@
 </head>
 <body class="bg-stone-50 text-stone-800 min-h-screen antialiased selection:bg-brand-100 selection:text-brand-600">
 
-  <!-- Toast Container -->
   <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
   <div class="max-w-7xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
@@ -146,15 +145,13 @@
             </tr>
           </thead>
           <tbody id="rows" class="divide-y divide-stone-100 text-sm">
-            <tr>
-              <td colspan="7" class="px-6 py-16 text-center text-stone-400">
-                <svg class="w-8 h-8 mx-auto mb-3 animate-spin text-brand-500" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
-                <span class="text-sm font-medium">Fetching live data...</span>
-              </td>
-            </tr>
+            <tr><td colspan="7" class="px-6 py-16 text-center text-stone-400">
+              <svg class="w-8 h-8 mx-auto mb-3 animate-spin text-brand-500" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <span class="text-sm font-medium">Fetching live data...</span>
+            </td></tr>
           </tbody>
         </table>
       </div>
@@ -169,7 +166,7 @@
   <script>
     // ==========================================
     // CONFIGURATION
-    // =========================================
+    // ==========================================
     const SUPABASE_URL = 'https://vhjhvnyfwarlwuwlcxub.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoamh2bnlmd2FybHd1d2xjeHViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyOTE5ODQsImV4cCI6MjEwNjg2Nzk4NH0.vxfmY-S6CHdQ3jt0kmNEmfp9bTKkqxxO9OF4DkMyKNI' 
     
@@ -209,8 +206,8 @@
       const headers = ['Date', 'Student Name', 'Roll No', 'Subject', 'Entry Time', 'Exit Time', 'Duration', 'Status'];
       const rows = allData.map(r => [
         r.attendance_date || '',
-        r.students?.name || 'Unknown',
-        r.students?.roll_no || 'N/A',
+        r.studentName || 'Unknown',
+        r.rollNo || 'N/A',
         r.subject || 'IoT Lab',
         r.first_scan ? new Date(r.first_scan).toLocaleString() : '',
         r.second_scan ? new Date(r.second_scan).toLocaleString() : '',
@@ -255,8 +252,8 @@
       const statusFilter = document.getElementById('status-filter').value;
 
       let filtered = allData.filter(r => {
-        const name = (r.students?.name || '').toLowerCase();
-        const roll = (r.students?.roll_no || '').toLowerCase();
+        const name = (r.studentName || '').toLowerCase();
+        const roll = (r.rollNo || '').toLowerCase();
         const matchesSearch = name.includes(searchTerm) || roll.includes(searchTerm);
         const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
         return matchesSearch && matchesStatus;
@@ -265,7 +262,7 @@
       filtered.sort((a, b) => {
         let aVal, bVal;
         switch (currentSort.column) {
-          case 'name': aVal = a.students?.name || ''; bVal = b.students?.name || ''; break;
+          case 'name': aVal = a.studentName || ''; bVal = b.studentName || ''; break;
           case 'subject': aVal = a.subject || ''; bVal = b.subject || ''; break;
           case 'attendance_date': aVal = a.attendance_date || ''; bVal = b.attendance_date || ''; break;
           case 'first_scan': aVal = a.first_scan || ''; bVal = b.first_scan || ''; break;
@@ -290,8 +287,8 @@
           </td></tr>`;
       } else {
         tbody.innerHTML = filtered.map((r, index) => {
-          const studentName = r.students?.name || 'Unknown Student';
-          const rollNo = r.students?.roll_no || 'N/A';
+          const studentName = r.studentName || 'Unknown Student';
+          const rollNo = r.rollNo || 'N/A';
           let statusBadge = '';
           if (r.status === 'PRESENT') statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">Present</span>`;
           else if (r.status === 'PENDING') statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span> In Lab</span>`;
@@ -311,14 +308,14 @@
         }).join('');
       }
 
-      // Mobile cards logic
+      // Mobile cards
       const mobileCards = document.getElementById('mobile-cards');
       if (filtered.length === 0) {
         mobileCards.innerHTML = `<div class="bg-white rounded-2xl p-8 text-center text-stone-400"><p class="font-medium">No records found</p></div>`;
       } else {
         mobileCards.innerHTML = filtered.map((r, index) => {
-          const studentName = r.students?.name || 'Unknown Student';
-          const rollNo = r.students?.roll_no || 'N/A';
+          const studentName = r.studentName || 'Unknown Student';
+          const rollNo = r.rollNo || 'N/A';
           let statusBadge = '';
           if (r.status === 'PRESENT') statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Present</span>`;
           else if (r.status === 'PENDING') statusBadge = `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span> In Lab</span>`;
@@ -344,21 +341,47 @@
       }
     }
 
+    // ==========================================
+    // THE FIX: Fetch tables separately, merge in JS
+    // This bypasses the ambiguous FK relationship entirely
+    // ==========================================
     async function load() {
       try {
-        // FIX APPLIED HERE: Added !uid to force the correct relationship
-        const { data, error } = await sb
+        // Step 1: Fetch attendance records
+        const { data: attendanceData, error: attError } = await sb
           .from('attendance')
-          .select('id, uid, subject, first_scan, second_scan, status, attendance_date, schedule_id, students!uid(name, roll_no)')
+          .select('id, uid, subject, first_scan, second_scan, status, attendance_date, schedule_id')
           .order('attendance_date', { ascending: false })
           .order('first_scan', { ascending: false })
           .limit(150);
 
-        if (error) throw error;
+        if (attError) throw attError;
 
+        // Step 2: Fetch all students (small table, fast)
+        const { data: studentsData, error: stuError } = await sb
+          .from('students')
+          .select('uid, name, roll_no');
+
+        if (stuError) throw stuError;
+
+        // Step 3: Build a lookup map for O(1) student lookups
+        const studentMap = {};
+        (studentsData || []).forEach(s => {
+          studentMap[s.uid] = { name: s.name, roll_no: s.roll_no };
+        });
+
+        // Step 4: Merge attendance with student info
         const previousCount = allData.length;
-        allData = data || [];
+        allData = (attendanceData || []).map(record => {
+          const student = studentMap[record.uid] || {};
+          return {
+            ...record,
+            studentName: student.name || null,
+            rollNo: student.roll_no || null
+          };
+        });
 
+        // Update stats
         const total = allData.length;
         const present = allData.filter(r => r.status === 'PRESENT').length;
         const pending = allData.filter(r => r.status === 'PENDING').length;
@@ -379,10 +402,10 @@
         console.error('Error loading data:', err);
         document.getElementById('rows').innerHTML = `
           <tr><td colspan="7" class="px-6 py-16 text-center text-red-500">
-            <p class="font-semibold">Unable to connect to database</p>
-            <p class="text-xs text-red-400 mt-1">Please check your Supabase URL and Anon Key.</p>
+            <p class="font-semibold">Unable to load data</p>
+            <p class="text-xs text-red-400 mt-1 font-mono">${err.message}</p>
           </td></tr>`;
-        showToast('Failed to load data: ' + err.message, 'error');
+        showToast('Failed to load data', 'error');
       }
     }
 
